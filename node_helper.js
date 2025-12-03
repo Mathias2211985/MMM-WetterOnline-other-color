@@ -24,7 +24,7 @@ module.exports = NodeHelper.create({
 
 			let event = this.extractEvent(dailyData, hourlyData, body);
 
-			this.getHelper().sendSocketNotification("WETTERONLINE_RESULTS", event);
+			this.sendSocketNotification("WETTERONLINE_RESULTS", event);
 		}
 	},
 
