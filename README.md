@@ -73,6 +73,3 @@ All options are optional so the module works out of the box.
 
 This was written by a node/MM first timer. Expect ugly design choices, terrible use of JavaScript/CSS and feel free to create pull requests with improvements.
 
-## License: GPL-3.0
-
-See [LICENSE](LICENSE)
