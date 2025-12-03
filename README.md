@@ -9,7 +9,7 @@ This is a module for [MagicMirror²](https://github.com/MichMich/MagicMirror/). 
 Go to modules folder
 
 ```bash
-cd modules/
+cd MagicMirror/modules/
 ```
 
 Clone this module from Github
@@ -25,7 +25,7 @@ After adding this module to your config (see below) restart your MagicMirror.
 Go to modules folder
 
 ```bash
-cd modules/MMM-WetterOnline-other-Color
+cd MagicMirror/modules/MMM-WetterOnline-other-Color
 ```
 
 Pull changes from Github
@@ -72,7 +72,3 @@ All options are optional so the module works out of the box.
 ## Developer notes
 
 This was written by a node/MM first timer. Expect ugly design choices, terrible use of JavaScript/CSS and feel free to create pull requests with improvements.
-
-## License: GPL-3.0
-
-See [LICENSE](LICENSE)
