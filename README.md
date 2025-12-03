@@ -1,4 +1,4 @@
-# MMM-WetterOnline
+# MMM-WetterOnline-other-Color
 
 This is a module for [MagicMirror²](https://github.com/MichMich/MagicMirror/). It displays weather data for weather stations operated by [WetterOnline](https://www.wetteronline.de).
 
@@ -15,7 +15,7 @@ cd modules/
 Clone this module from Github
 
 ```bash
-git clone https://github.com/bogenpirat/MMM-WetterOnline
+git clone https://github.com/Mathias2211985/MMM--WetterOnline-other-Color
 ```
 
 After adding this module to your config (see below) restart your MagicMirror.
@@ -25,7 +25,7 @@ After adding this module to your config (see below) restart your MagicMirror.
 Go to modules folder
 
 ```bash
-cd modules/MMM-WetterOnline
+cd modules/MMM-WetterOnline-other-Color
 ```
 
 Pull changes from Github
@@ -43,7 +43,7 @@ To use this module, add the following configuration block to the modules array i
 ```js
     modules: [
         {
-            module: 'MMM-WetterOnline',
+            module: 'MMM-WetterOnline-other-Color',
             position: "top_right",
             config: {
                 city: "berlin",

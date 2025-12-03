@@ -1,5 +1,5 @@
 {
-  "name": "mmm-wetteronline",
+  "name": "mmm-wetteronline-other-color",
   "version": "1.0.0",
   "description": "MagicMirror² module to display WetterOnline weather data.",
   "author": "Bog",
@@ -7,7 +7,7 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bogenpirat/MMM-WetterOnline.git"
+    "url": "git+https://github.com/Mathias2211985/MMM--WetterOnline-other-Color.git"
   },
-  "main": "MMM-WetterOnline.js"
+  "main": "MMM-WetterOnline-other-Color.js"
 }

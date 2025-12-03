@@ -34,10 +34,10 @@ module.exports = NodeHelper.create({
 
 		if (match) {
 			const gid = match[1];
-			Log.debug(`MMM-WetterOnline: The gid of city "${city}" is ${gid}.`)
+			Log.debug(`MMM-WetterOnline-other-Color: The gid of city "${city}" is ${gid}.`)
 			return gid;
 		} else {
-			Log.error(`MMM-WetterOnline: The gid of city "${city}" could not be extracted.`);
+			Log.error(`MMM-WetterOnline-other-Color: The gid of city "${city}" could not be extracted.`);
 		}
 	},
 
