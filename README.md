@@ -25,7 +25,7 @@ After adding this module to your config (see below) restart your MagicMirror.
 Go to modules folder
 
 ```bash
-cd MagicMirror/modules/MMM-WetterOnline-other-Color
+cd MagicMirror/modules/MMM--WetterOnline-other-Color
 ```
 
 Pull changes from Github
