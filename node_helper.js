@@ -88,7 +88,7 @@ module.exports = NodeHelper.create({
 				low: Math.round(dailyForecast["temperature"]["min"]["air"]),
 				pop: Math.round(dailyForecast["precipitation"]["probability"] * 100),
 				// dirty hack - sunrise is usually ON the day (b/c offsets)
-				day_time_label: new Date(dailyForecast["sun"]["rise"]).toLocaleDateString(new Intl.NumberFormat().resolvedOptions().locale, { weekday: "short" }),
+				day_time_label: new Date(dailyForecast["sun"]["rise"]).toLocaleDateString("de-DE", { weekday: "short" }),
 				sunhours: Math.round(dailyForecast["sun"]["duration"]["absolute"]),
 				air_pressure: {
 					hpa: Math.round(dailyForecast["air_pressure"]["hpa"]),
