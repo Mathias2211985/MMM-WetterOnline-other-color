@@ -1,144 +1,184 @@
 const Log = require("logger");
 const NodeHelper = require("node_helper");
 
+const WU_ICON_MAP = [
+	"wi-thunderstorm",            // 0
+	"wi-storm-showers",           // 1
+	"wi-thunderstorm",            // 2
+	"wi-thunderstorm",            // 3
+	"wi-thunderstorm",            // 4
+	"wi-rain-mix",                // 5
+	"wi-rain-mix",                // 6
+	"wi-rain-mix",                // 7
+	"wi-sprinkle",                // 8
+	"wi-sprinkle",                // 9
+	"wi-hail",                    // 10
+	"wi-showers",                 // 11
+	"wi-showers",                 // 12
+	"wi-snow",                    // 13
+	"wi-snow",                    // 14
+	"wi-snow",                    // 15
+	"wi-snow",                    // 16
+	"wi-hail",                    // 17
+	"wi-sleet",                   // 18
+	"wi-cloudy-gusts",            // 19
+	"wi-fog",                     // 20
+	"wi-fog",                     // 21
+	"wi-smoke",                   // 22
+	"wi-cloudy-gusts",            // 23
+	"wi-cloudy-windy",            // 24
+	"wi-thermometer",             // 25
+	"wi-cloudy",                  // 26
+	"wi-night-alt-cloudy",        // 27
+	"wi-day-cloudy",              // 28
+	"wi-night-alt-partly-cloudy", // 29
+	"wi-day-cloudy",              // 30
+	"wi-night-clear",             // 31
+	"wi-day-sunny",               // 32
+	"wi-night-alt-partly-cloudy", // 33
+	"wi-day-sunny-overcast",      // 34
+	"wi-hail",                    // 35
+	"wi-day-sunny",               // 36
+	"wi-day-storm-showers",       // 37
+	"wi-storm-showers",           // 38
+	"wi-day-showers",             // 39
+	"wi-showers",                 // 40
+	"wi-snow-wind",               // 41
+	"wi-snow",                    // 42
+	"wi-snow",                    // 43
+	"wi-day-cloudy",              // 44
+	"wi-storm-showers",           // 45
+	"wi-snow",                    // 46
+	"wi-day-storm-showers",       // 47
+];
+
+// GitHub-based jsDelivr URL (npm package contains no SVG files)
+const ICON_BASE = "https://cdn.jsdelivr.net/gh/erikflowers/weather-icons@2.0.12/svg/";
+
+// Windrichtung in Grad → Himmelsrichtung
+function degreesToCardinal(deg) {
+	const dirs = ["N","NNO","NO","ONO","O","OSO","SO","SSO","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+	return dirs[Math.round(deg / 22.5) % 16];
+}
+
 module.exports = NodeHelper.create({
 	async socketNotificationReceived(notification, payload) {
+		Log.log("[WU] Notification empfangen: " + notification);
 		if (notification === "WETTERONLINE_REFRESH") {
-			await this.updateWOTrend(payload.city, payload.userAgent);
+			Log.log("[WU] Starte API-Abruf für lat=" + payload.lat + " lon=" + payload.lon);
+			await this.updateWeather(payload.lat, payload.lon, payload.apiKey, payload.pwsStationId);
 		}
 	},
 
-	async updateWOTrend(city, userAgent) {
-		let url = `https://www.wetteronline.de/wetter/${city}`;
-		let body = await this.getUrl(url, userAgent);
-		let gid = this.findGid(city, body);
+	async updateWeather(lat, lon, apiKey, pwsStationId) {
+		try {
+			const forecastUrl = `https://api.weather.com/v3/wx/forecast/daily/5day?geocode=${lat},${lon}&format=json&units=m&language=de-DE&apiKey=${apiKey}`;
 
-		if (gid) {
-			const WO_DAILY_URL = `https://api-app.wetteronline.de/app/weather/forecast?av=2&mv=13&c=d2ViOmFxcnhwWDR3ZWJDSlRuWeb=&location_id=${gid}&timezone=${process.env.TZ}`;
-			let daily_promise = await this.getUrl(WO_DAILY_URL, userAgent);
-			let dailyData = JSON.parse(await daily_promise);
+			// PWS-Abruf parallel zum Forecast, wenn Stations-ID konfiguriert
+			const requests = [fetch(forecastUrl)];
+			if (pwsStationId) {
+				const pwsUrl = `https://api.weather.com/v2/pws/observations/current?stationId=${pwsStationId}&format=json&units=m&apiKey=${apiKey}`;
+				requests.push(fetch(pwsUrl));
+			}
 
-			const WO_HOURLY_URL = `https://api-app.wetteronline.de/app/weather/hourcast?av=2&mv=13&c=d2ViOmFxcnhwWDR3ZWJDSlRuWeb=&location_id=${gid}&timezone=${process.env.TZ}`;
-			let hourly_promise = await this.getUrl(WO_HOURLY_URL, userAgent);
-			let hourlyData = JSON.parse(await hourly_promise);
+			const responses = await Promise.all(requests);
+			if (!responses[0].ok) throw new Error(`Forecast HTTP ${responses[0].status}`);
+			const forecast = await responses[0].json();
 
-			let event = this.extractEvent(dailyData, hourlyData, body);
+			let pws = null;
+			if (pwsStationId && responses[1] && responses[1].ok) {
+				const pwsData = await responses[1].json();
+				pws = pwsData.observations?.[0] ?? null;
+				if (pws) Log.log("[WU] PWS-Temperatur: " + pws.metric.temp + "°C");
+			}
 
+			const event = this.buildEvent(forecast, pws);
+			Log.log("[WU] Daten erfolgreich verarbeitet, sende WETTERONLINE_RESULTS");
 			this.sendSocketNotification("WETTERONLINE_RESULTS", event);
+		} catch (error) {
+			Log.error("MMM-WetterOnline-other-Color (WU): " + error);
 		}
 	},
 
-	findGid(city, body) {
-		const exp = /gid : "([^"]+)"/s;
-		const match = body.match(exp);
+	icon(code) {
+		return WU_ICON_MAP[code] || "wi-day-cloudy";
+	},
 
-		if (match) {
-			const gid = match[1];
-			Log.debug(`MMM-WetterOnline-other-Color: The gid of city "${city}" is ${gid}.`)
-			return gid;
+	buildEvent(f, pws) {
+		const dp = f.daypart[0];
+
+		// Aktuellen Daypart anhand der Serverzeit bestimmen:
+		// Index 0 = heute Tag (D, ca. 6-18 Uhr), Index 1 = heute Nacht (N, ca. 18-6 Uhr)
+		const hour = new Date().getHours();
+		const preferNight = hour >= 18 || hour < 6;
+		let todayIdx;
+		if (preferNight) {
+			todayIdx = dp.iconCode[1] !== null ? 1 : 0;
 		} else {
-			Log.error(`MMM-WetterOnline-other-Color: The gid of city "${city}" could not be extracted.`);
+			todayIdx = dp.iconCode[0] !== null ? 0 : 1;
 		}
-	},
 
-	extractSymbolUrl(body) {
-		const symbolUrlBaseMatcher = body.match(/<base href="([^"]+)" >/);
-		let symbolUrlBase = "https://www.wetteronline.de";
-		if (symbolUrlBaseMatcher && symbolUrlBaseMatcher[1]) {
-			symbolUrlBase += symbolUrlBaseMatcher[1];
-		}
-		let symbolUrlMatcher = body.match(/<img[^>]+class="symbol"[^>]+src="([^"]+\/)[^"\/]+"/ms);
-		if (symbolUrlMatcher && symbolUrlMatcher[1]) {
-			return symbolUrlBase + symbolUrlMatcher[1];
-		} else {
-			Log.warn("Could not extract symbol base URL from body, using default.");
-			return "https://www.wetteronline.de/www-m3-ng-assets/assets/weather-symbol/";
-		}
-	},
+		// Aktuelle Temperatur: PWS hat Vorrang (echte Messung), Fallback: Forecast-Periode
+		const currTemp = pws
+			? String(Math.round(pws.metric.temp))
+			: String(dp.temperature[todayIdx] ?? "?");
 
-	extractEvent(dailyData, hourlyData, body) {
-		// extract current temp
-		let currentTempMatch = body.match(/<span[^>]+class="air-temp">\s*(-?\d+)°\s*<\/span>/ms);
-		let currTemp = currentTempMatch ? currentTempMatch[1] : null;
+		// Wind: PWS hat Vorrang
+		const currWindDir = pws
+			? degreesToCardinal(pws.winddir)
+			: (dp.windDirectionCardinal[todayIdx] ?? "");
+		const currWindKmh = pws
+			? String(Math.round(pws.metric.windSpeed))
+			: String(dp.windSpeed[todayIdx] ?? 0);
 
-		// extract url patterns
-		let dailiesSymbolUrl = hourliesSymbolUrl = this.extractSymbolUrl(body);
+		const currText = dp.wxPhraseLong[todayIdx] ?? "";
 
-		// generate hourlies
-		let hourlies = [];
-		hourlyData["hours"].forEach(hourlyForecast => {
+		// hourlies: use all daypart periods (day+night alternating)
+		const hourlies = [];
+		for (let i = 0; i < dp.iconCode.length; i++) {
+			if (dp.iconCode[i] === null) continue;
 			hourlies.push({
-				symbol: hourlyForecast["symbol"],
-				temperature: Math.round(hourlyForecast["temperature"]["air"]),
-				wind_speed_kmh: hourlyForecast["wind"]["speed"]["kilometer_per_hour"]["value"],
-				air_pressure: {
-					hpa: Math.round(hourlyForecast["air_pressure"]["hpa"]),
-					inhg: (hourlyForecast["air_pressure"]["inhg"]).toFixed(2),
-					mmhg: Math.round(hourlyForecast["air_pressure"]["mmhg"])
-				}
+				symbol: this.icon(dp.iconCode[i]),
+				temperature: dp.temperature[i] ?? 0,
+				wind_speed_kmh: dp.windSpeed[i] ?? 0,
+				air_pressure: { hpa: 0, inhg: "0.00", mmhg: 0 }
 			});
-		});
+		}
 
-		// generate dailies
-		let dailies = [];
-		dailyData.forEach(dailyForecast => {
+		// dailies: one per calendar day
+		const dailies = [];
+		for (let i = 0; i < (f.temperatureMax || []).length; i++) {
+			const dpIdx = i * 2; // daytime index for this day
+			const ic = dp.iconCode[dpIdx] !== null
+				? dp.iconCode[dpIdx]
+				: (dp.iconCode[dpIdx + 1] !== null ? dp.iconCode[dpIdx + 1] : 32);
+			const pop = dp.precipChance[dpIdx] !== null
+				? dp.precipChance[dpIdx]
+				: (dp.precipChance[dpIdx + 1] !== null ? dp.precipChance[dpIdx + 1] : 0);
+
 			dailies.push({
-				symbol: dailyForecast["symbol"],
-				high: Math.round(dailyForecast["temperature"]["max"]["air"]),
-				low: Math.round(dailyForecast["temperature"]["min"]["air"]),
-				pop: Math.round(dailyForecast["precipitation"]["probability"] * 100),
-				// dirty hack - sunrise is usually ON the day (b/c offsets)
-				day_time_label: new Date(dailyForecast["sun"]["rise"]).toLocaleDateString("de-DE", { weekday: "short" }),
-				sunhours: Math.round(dailyForecast["sun"]["duration"]["absolute"]),
-				air_pressure: {
-					hpa: Math.round(dailyForecast["air_pressure"]["hpa"]),
-					inhg: (dailyForecast["air_pressure"]["inhg"]).toFixed(2),
-					mmhg: Math.round(dailyForecast["air_pressure"]["mmhg"])
-				}
+				symbol: this.icon(ic),
+				// calendarDayTemperature bleibt den ganzen Tag gültig (temperatureMax wird abends null)
+				high: f.calendarDayTemperatureMax[i] ?? f.temperatureMax[i] ?? 0,
+				low: f.calendarDayTemperatureMin[i] ?? f.temperatureMin[i] ?? 0,
+				pop: pop ?? 0,
+				day_time_label: (f.dayOfWeek[i] || "").substring(0, 2),
+				sunhours: 0,
+				air_pressure: { hpa: 0, inhg: "0.00", mmhg: 0 }
 			});
-		});
-
-		// extract current conditions
-		let currentCondMatch = body.match(/WO\.metadata\.p_city_weather\.nowcastBarMetadata = (\{.+\})$/m);
-		let currentWeatherMatch = body.match(/<span class="gust\s*">\s*(\S+) (\d+) km\/h\s*<\/span>/ms);
-
-		let currConditions = {
-			symbol_text: currentCondMatch ? JSON.parse(currentCondMatch[1])["nowcastBar"][0]["text"] : "",
-			wind_speed_text: currentWeatherMatch ? currentWeatherMatch[1] : "",
-			wind_speed_kmh: currentWeatherMatch ? currentWeatherMatch[2] : "",
-			air_pressure: hourlyData["hours"][0]["air_pressure"]
-		};
+		}
 
 		return {
 			currentTemp: currTemp,
-			currConditions: currConditions,
-			hourlies: hourlies,
-			dailies: dailies,
-			symbolUrls: {
-				dailies: dailiesSymbolUrl,
-				hourlies: hourliesSymbolUrl
+			currConditions: {
+				symbol_text: currText,
+				wind_speed_text: currWindDir,
+				wind_speed_kmh: currWindKmh,
+				air_pressure: { hpa: 0, inhg: "0.00", mmhg: 0 }
 			},
-			debug: currentCondMatch ? currentCondMatch[1] : null
+			hourlies: hourlies.length ? hourlies : [{ symbol: this.icon(32), temperature: 0, wind_speed_kmh: 0, air_pressure: {} }],
+			dailies,
+			symbolUrls: { dailies: ICON_BASE, hourlies: ICON_BASE }
 		};
-	},
-
-	getHelper() {
-		return this;
-	},
-
-	getUrl(myUrl, userAgent) {
-		return fetch(myUrl, {
-			headers: {
-				"User-Agent": userAgent
-			}
-		})
-			.then(response => response.text())
-			.catch(error => {
-				throw new Error(error);
-			});
-	},
-
-	parseInlineJson(str) {
-		return eval?.(`"use strict";(${str})`);
 	}
 });

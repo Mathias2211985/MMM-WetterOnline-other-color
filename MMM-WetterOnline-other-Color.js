@@ -1,19 +1,19 @@
 /* MagicMirror²
  * Module: MMM-WetterOnline-other-Color
- *
- * By bog
- *
+ * Datenquelle: Weather Underground / weather.com API v3
  */
 Module.register("MMM-WetterOnline-other-Color", {
 
 	defaults: {
 		useHeader: true,
 		header: "",
-		city: "new-york",
+		lat: "51.898280",
+		lon: "12.267471",
+		apiKey: "",
+		pwsStationId: "", // optional: WU-Stations-ID für echte Ist-Temperatur (z.B. "IDESSA126")
 		width: "400px",
-		daysTrend: 4,
-		updateIntervalMins: 5,
-		userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+		daysTrend: 5,
+		updateIntervalMins: 60, // 60 Min = 24 Requests/Tag (Limit: 1500/Tag)
 		showSunHours: false,
 		showAirPressure: null
 	},
@@ -32,9 +32,9 @@ Module.register("MMM-WetterOnline-other-Color", {
 
 	start() {
 		var self = this;
-		var payload = { city: this.config.city, userAgent: this.config.userAgent };
+		var payload = { lat: this.config.lat, lon: this.config.lon, apiKey: this.config.apiKey, pwsStationId: this.config.pwsStationId };
 		setInterval(function () {
-			self.sendSocketNotification("WETTERONLINE_REFRESH", payload); // no speed defined, so it updates instantly.
+			self.sendSocketNotification("WETTERONLINE_REFRESH", payload);
 		}, this.config.updateIntervalMins * 60 * 1000);
 		self.sendSocketNotification("WETTERONLINE_REFRESH", payload);
 	},
@@ -53,7 +53,7 @@ Module.register("MMM-WetterOnline-other-Color", {
 			var currentWrapper = document.createElement("div");
 			currentWrapper.classList.add("weather");
 			var tempClass = this.getTempClass(this.weatherData.currentTemp);
-			currentWrapper.insertAdjacentHTML("beforeend", `<span class="logo-container"><img src="${this.weatherData.symbolUrls.hourlies}${this.weatherData.hourlies[0].symbol}.svg" class="blacknwhite" width="64" /> <span class="current-temp ${tempClass}">${this.weatherData.currentTemp}&deg;C</span></span>`);
+			currentWrapper.insertAdjacentHTML("beforeend", `<span class="logo-container"><img src="${this.weatherData.symbolUrls.hourlies}${this.weatherData.hourlies[0].symbol}.svg" class="inverted" width="64" /> <span class="current-temp ${tempClass}">${this.weatherData.currentTemp}&deg;C</span></span>`);
 			currentWrapper.insertAdjacentHTML("beforeend", "<br />");
 			currentWrapper.insertAdjacentHTML("beforeend", this.weatherData.currConditions.symbol_text);
 			currentWrapper.insertAdjacentHTML("beforeend", "<br />");
@@ -68,14 +68,14 @@ Module.register("MMM-WetterOnline-other-Color", {
 
 				var headerHtml = "<tr>";
 				for (let i = 0; i < this.weatherData.dailies.length && i < this.config.daysTrend; i++) {
-					headerHtml += `<th class="trendcell">${this.weatherData.dailies[i].day_time_label.replace(/ - .*/, "").substring(0, 2)}</th>`;
+					headerHtml += `<th class="trendcell">${this.weatherData.dailies[i].day_time_label}</th>`;
 				}
 				ft.insertAdjacentHTML("beforeend", `${headerHtml}</tr>`);
 
 				var dailyEntriesHtml = "<tr>";
 				for (let i = 0; i < this.weatherData.dailies.length && i < this.config.daysTrend; i++) {
 					dailyEntriesHtml += "<td class='trendcell'>";
-					dailyEntriesHtml += `<img src="${this.weatherData.symbolUrls.dailies}${this.weatherData.dailies[i].symbol}.svg" class="blacknwhite" width="32" />`;
+					dailyEntriesHtml += `<img src="${this.weatherData.symbolUrls.dailies}${this.weatherData.dailies[i].symbol}.svg" class="inverted" width="32" />`;
 					dailyEntriesHtml += "<br />";
 					if (this.config.showSunHours === true) {
 						dailyEntriesHtml += `<span class="logo-container"><img class="legend-logo" src="${this.file("assets/sun-svgrepo-com.svg")}" /> ${this.weatherData.dailies[i].sunhours}</span>`;
