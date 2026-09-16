@@ -74,11 +74,16 @@ module.exports = NodeHelper.create({
 		try {
 			const forecastUrl = `https://api.weather.com/v3/wx/forecast/daily/5day?geocode=${lat},${lon}&format=json&units=m&language=de-DE&apiKey=${apiKey}`;
 
-			// PWS-Abruf parallel zum Forecast, wenn Stations-ID konfiguriert
+			// PWS-Abruf parallel zum Forecast, wenn Stations-ID konfiguriert.
+			// Die Station ist optional: Faellt sie aus, darf das den Forecast nicht mitreissen.
+			// Deshalb wird ein Netzwerkfehler hier abgefangen statt Promise.all scheitern zu lassen.
 			const requests = [fetch(forecastUrl)];
 			if (pwsStationId) {
 				const pwsUrl = `https://api.weather.com/v2/pws/observations/current?stationId=${pwsStationId}&format=json&units=m&apiKey=${apiKey}`;
-				requests.push(fetch(pwsUrl));
+				requests.push(fetch(pwsUrl).catch((e) => {
+					Log.warn("[WU] PWS-Abruf fehlgeschlagen (" + e.message + ") - nutze Forecast");
+					return null;
+				}));
 			}
 
 			const responses = await Promise.all(requests);
@@ -86,10 +91,22 @@ module.exports = NodeHelper.create({
 			const forecast = await responses[0].json();
 
 			let pws = null;
-			if (pwsStationId && responses[1] && responses[1].ok) {
-				const pwsData = await responses[1].json();
-				pws = pwsData.observations?.[0] ?? null;
-				if (pws) Log.log("[WU] PWS-Temperatur: " + pws.metric.temp + "°C");
+			if (pwsStationId && responses[1]) {
+				if (responses[1].status === 204) {
+					// 204 = Station sendet gerade keine Messwerte (offline, Stromausfall, WLAN).
+					// Kommt bei privaten Stationen regelmaessig vor - kein Fehler, nur Fallback.
+					Log.warn("[WU] PWS " + pwsStationId + " liefert keine Daten (HTTP 204) - nutze Forecast");
+				} else if (responses[1].ok) {
+					try {
+						const pwsData = await responses[1].json();
+						pws = pwsData.observations?.[0] ?? null;
+						if (pws) Log.log("[WU] PWS-Temperatur: " + pws.metric.temp + "°C");
+					} catch (e) {
+						Log.warn("[WU] PWS-Antwort unlesbar (" + e.message + ") - nutze Forecast");
+					}
+				} else {
+					Log.warn("[WU] PWS HTTP " + responses[1].status + " - nutze Forecast");
+				}
 			}
 
 			const event = this.buildEvent(forecast, pws);
